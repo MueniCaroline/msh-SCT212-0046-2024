@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include <fcntl.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -65,6 +66,8 @@ int main(void) {
     int last_status = 0;
     char *argv[MAX_ARGS];
 
+    signal(SIGINT, SIG_IGN);
+
     while (1) {
         reap_background();
 
@@ -125,6 +128,8 @@ int main(void) {
             perror("fork");
             last_status = 1;
         } else if (pid == 0) {
+            signal(SIGINT, SIG_DFL);
+
             if (outfile != NULL) {
                 int fd = open(outfile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
                 if (fd < 0) {
