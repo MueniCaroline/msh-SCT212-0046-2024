@@ -49,6 +49,14 @@ int handle_builtin(char **argv, char *line, int *last_status) {
     return 0;
 }
 
+void reap_background(void) {
+    int status;
+    pid_t pid;
+    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+        printf("[bg] PID %d finished\n", pid);
+    }
+}
+
 int main(void) {
     char *line = NULL;
     size_t len = 0;
@@ -57,6 +65,8 @@ int main(void) {
     char *argv[MAX_ARGS];
 
     while (1) {
+        reap_background();
+
         printf("msh[%d]> ", last_status);
         fflush(stdout);
 
@@ -67,6 +77,21 @@ int main(void) {
         }
 
         int argc = parse_line(line, argv);
+        if (argc == 0) {
+            continue;
+        }
+
+        int background = 0;
+        if (strcmp(argv[argc - 1], "&") == 0) {
+            background = 1;
+            argv[--argc] = NULL;
+        } else {
+            size_t last_len = strlen(argv[argc - 1]);
+            if (last_len > 1 && argv[argc - 1][last_len - 1] == '&') {
+                background = 1;
+                argv[argc - 1][last_len - 1] = '\0';
+            }
+        }
         if (argc == 0) {
             continue;
         }
@@ -84,18 +109,24 @@ int main(void) {
             perror(argv[0]);
             _exit(127);
         } else {
-            int status;
-            if (waitpid(pid, &status, 0) < 0) {
-                perror("waitpid");
-                last_status = 1;
-            } else if (WIFEXITED(status)) {
-                last_status = WEXITSTATUS(status);
-            } else if (WIFSIGNALED(status)) {
-                last_status = 128 + WTERMSIG(status);
+            if (background) {
+                printf("[bg] PID %d\n", pid);
+                last_status = 0;
+            } else {
+                int status;
+                if (waitpid(pid, &status, 0) < 0) {
+                    perror("waitpid");
+                    last_status = 1;
+                } else if (WIFEXITED(status)) {
+                    last_status = WEXITSTATUS(status);
+                } else if (WIFSIGNALED(status)) {
+                    last_status = 128 + WTERMSIG(status);
+                }
             }
         }
     }
 
+    reap_background();
     free(line);
     return last_status;
 }
