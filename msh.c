@@ -1,4 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -100,11 +101,44 @@ int main(void) {
             continue;
         }
 
+        char *outfile = NULL;
+        int redir_error = 0;
+        for (int i = 0; i < argc; i++) {
+            if (strcmp(argv[i], ">") == 0) {
+                if (argv[i + 1] == NULL) {
+                    fprintf(stderr, "msh: syntax error near unexpected token `newline'\n");
+                    last_status = 2;
+                    redir_error = 1;
+                } else {
+                    outfile = argv[i + 1];
+                    argv[i] = NULL;
+                }
+                break;
+            }
+        }
+        if (redir_error) {
+            continue;
+        }
+
         pid_t pid = fork();
         if (pid < 0) {
             perror("fork");
             last_status = 1;
         } else if (pid == 0) {
+            if (outfile != NULL) {
+                int fd = open(outfile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                if (fd < 0) {
+                    perror("open");
+                    _exit(1);
+                }
+                if (dup2(fd, STDOUT_FILENO) < 0) {
+                    perror("dup2");
+                    close(fd);
+                    _exit(1);
+                }
+                close(fd);
+            }
+
             execvp(argv[0], argv);
             perror(argv[0]);
             _exit(127);
