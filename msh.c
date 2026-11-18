@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #define MAX_ARGS 128
 
@@ -36,6 +39,22 @@ int main(void) {
         int argc = parse_line(line, argv);
         if (argc == 0) {
             continue;
+        }
+
+        pid_t pid = fork();
+        if (pid < 0) {
+            perror("fork");
+            last_status = 1;
+        } else if (pid == 0) {
+            execvp(argv[0], argv);
+            perror(argv[0]);
+            _exit(127);
+        } else {
+            int status;
+            if (waitpid(pid, &status, 0) < 0) {
+                perror("waitpid");
+                last_status = 1;
+            }
         }
     }
 
